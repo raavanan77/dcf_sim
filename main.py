@@ -9,34 +9,74 @@ from random import randint
 import matplotlib.pyplot as plt
 import numpy as np
 
+sta_name = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ'
 slot_time = 20
 CW = 0
-difs = 20
+difs = 400
+frame_len=10000
+next_frame = 0
+end = 0
+csta = lambda quantity : [(randint(7,256) - randint(0,CW))*slot_time for _ in range(quantity)] # creating and setting random backoff peroid for Stations
 
-random = lambda x : randint(7,256) - randint(0,x)
-csta = lambda quantity : [random(CW)*slot_time for _ in range(quantity)]
+noc = 26 #no of clients
+sta_data = np.array(csta(noc))
+print(sta_data)
+stations = [f'Station {_}' for _ in sta_name[:noc]]
+frame_data = [(0,0) for _ in range(len(sta_data))]
+cw_data = [(0,0) for _ in range(len(sta_data))]
+d_times = []
+sta = list(sta_data)
+rcw_data = [(0,0)  for _ in sta]
 
-sta = np.array(csta(5))
-stations = ['Station A', 'Station B', 'Station C', 'Station D', 'Station E']
 
-frame_data = [(1, 3), (5, 7), (2, 4), (4, 6), (6, 8)] 
-defer_data = [(0, 1), (3, 5), (1, 2), (2, 4), (4, 6)] 
+def begin(client):
+    global next_frame,frame_len,frame_data,slot_time,end,cw_data,sta,difs,rcw_data
+    nos = len(client)
+    iter = 0
+    while nos > 0:
+        if 0 in client:
+            start = np.where(client == 0)[0][0] #
+            cw_data[start] = rcw_data[iter+start] 
+            next_data_frame = int(cw_data[start][-1]) #setting time of next frame which is data
+            end_data_frame = next_data_frame+frame_len #setting end of data frame
+            end_difs = end_data_frame+difs #setting end of DIFS
+            frame_data[start] = ((next_data_frame,end_data_frame))
+            d_times.append(end_data_frame)
+            d_times.append(end_difs)
+            for _ in client:
+                rcw_data.append((int(end_difs),int(end_difs)+_) if _ > 0 else (0,0)) #remain random backoff peroif of next slot
+            if nos == 1:
+                end = end_data_frame
+            nos -=1
+            iter += noc
+            client[0:] -= slot_time
+        else:client[0:] -= slot_time
 
-d_times = [1, 1.1, 3, 4]
+
+
+begin(sta_data)
 
 fig, ax = plt.subplots(figsize=(10, 6))
 
+
+# Plot RCW rectangles
+for i, (r_start, r_end) in enumerate(rcw_data):
+    ax.broken_barh([(r_start, r_end - r_start)], (i%noc, 0.2), facecolor='orange' ,alpha=0.4)
+
 # Plot FRAME rectangles
 for i, (f_start, f_end) in enumerate(frame_data):
-    ax.broken_barh([(f_start, f_end - f_start)], (i, 0.8), facecolor='green')
+    ax.broken_barh([(f_start, f_end - f_start)], (i, 0.35), facecolor='green')
 
 # Plot DEFER rectangles
-for i, (d_start, d_end) in enumerate(defer_data):
-    ax.broken_barh([(d_start, d_end - d_start)], (i, 0.8), facecolor='orange', alpha=0.5)
+for i, (d_start, d_end) in enumerate(cw_data):
+    ax.broken_barh([(d_start, d_end - d_start)], (i, 0.2), facecolor='orange')
 
 # Add DIFS markers
 for d in d_times:
     ax.vlines(d, ymin=-0.5, ymax=len(stations) - 0.5, linestyles='dashed')
+    
+for x in range(len(stations)):
+    ax.arrow(0,x,end,0,width=0.02,color='black')
 
 # Customize the plot
 ax.set_yticks(range(len(stations)))
@@ -46,5 +86,6 @@ ax.set_title('Channel Access')
 ax.set_xticks([])
 
 plt.show()
+#plt.savefig('Figure_1.png')
 
 
